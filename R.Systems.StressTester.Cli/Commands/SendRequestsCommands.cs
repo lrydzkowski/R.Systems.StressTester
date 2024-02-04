@@ -1,4 +1,6 @@
 ﻿using System.Diagnostics;
+using System.Net.Mime;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using R.Systems.StressTester.Cli.Models;
@@ -10,7 +12,7 @@ internal class SendRequestsCommands
 {
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<SendRequestsCommands> _logger;
-    private readonly IList<string> _statusCodes = new List<string>();
+    private readonly List<ResponseInfo> _responses = new();
 
     public SendRequestsCommands(IHttpClientFactory httpClientFactory, ILogger<SendRequestsCommands> logger)
     {
@@ -18,7 +20,7 @@ internal class SendRequestsCommands
         _logger = logger;
     }
 
-    public async Task SendAsync([FilePathExists] string filePath)
+    public async Task SendAsync([FilePathExists] string filePath, [DirectoryPathExists] string outDirectoryPath)
     {
         SendRequestsData? data = await GetDataAsync(filePath);
         if (data == null)
@@ -29,6 +31,7 @@ internal class SendRequestsCommands
         }
 
         await SendRequestsAsync(data);
+        await SaveResponsesAsync(outDirectoryPath);
     }
 
     private async Task<SendRequestsData?> GetDataAsync(string filePath)
@@ -64,19 +67,49 @@ internal class SendRequestsCommands
 
     private async Task SendRequestAsync(SendRequestsData data)
     {
-        HttpRequestMessage message = new(new HttpMethod(data.HttpMethod), data.Url);
-        foreach (SendRequestsHeader header in data.Headers)
+        try
         {
-            message.Headers.Add(header.Name, header.Value);
-        }
+            HttpRequestMessage message = new(new HttpMethod(data.HttpMethod), data.Url);
+            foreach (SendRequestsHeader header in data.Headers)
+            {
+                message.Headers.Add(header.Name, header.Value);
+            }
 
-        if (data.Body != null)
+            if (data.Body != null)
+            {
+                message.Content = new StringContent(
+                    JsonSerializer.Serialize(data.Body),
+                    Encoding.UTF8,
+                    MediaTypeNames.Application.Json
+                );
+            }
+
+            HttpClient httpClient = _httpClientFactory.CreateClient();
+            HttpResponseMessage response = await httpClient.SendAsync(message);
+            _responses.Add(
+                new ResponseInfo
+                {
+                    HttpMethod = response.RequestMessage?.Method?.ToString(),
+                    Url = response.RequestMessage?.RequestUri?.ToString(),
+                    StatusCode = (int?)response.StatusCode
+                }
+            );
+        }
+        catch (Exception ex)
         {
-            message.Content = new StringContent(data.Body);
-        }
+            string message = ex.Message;
+            if (ex.InnerException != null)
+            {
+                message += " " + ex.InnerException.Message;
+            }
 
-        HttpClient httpClient = _httpClientFactory.CreateClient();
-        HttpResponseMessage response = await httpClient.SendAsync(message);
-        _statusCodes.Add(response.StatusCode.ToString());
+            _responses.Add(new ResponseInfo { ErrorMsg = message, Error = true });
+        }
+    }
+
+    private async Task SaveResponsesAsync(string outDirectoryPath)
+    {
+        string serializedResponses = JsonSerializer.Serialize(_responses);
+        await File.WriteAllTextAsync($"{outDirectoryPath}\\results.json", serializedResponses);
     }
 }

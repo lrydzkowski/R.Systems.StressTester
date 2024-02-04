@@ -6,7 +6,7 @@ internal class SendRequestsData
 
     public string HttpMethod { get; init; } = "";
 
-    public string? Body { get; init; }
+    public object? Body { get; init; }
 
     public List<SendRequestsHeader> Headers { get; init; } = new();
 

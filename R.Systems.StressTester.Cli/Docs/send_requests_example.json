@@ -7,5 +7,10 @@
       "name": "",
       "value": ""
     }
-  ]
+  ],
+  "timeInfo": {
+    "requests": 100,
+    "intervalInSeconds": 1,
+    "timeInSecods": 300
+  }
 }

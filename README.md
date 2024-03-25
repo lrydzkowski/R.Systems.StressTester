@@ -20,6 +20,11 @@ A configuration file can be created based on the example file: `R.Systems.Stress
       "name": "Authorization",
       "value": "Bearer <token>"
     }
-  ]
+  ],
+  "timeInfo": {
+    "requests": 100,
+    "intervalInSeconds": 1,
+    "timeInSecods": 300
+  }
 }
 ```
